@@ -1,5 +1,9 @@
 ﻿namespace ViThreading
 {
+    /// <summary>
+    /// Обрабатывает действия с приоритетами, используя пул рабочих потоков.
+    /// Позволяет динамически управлять количеством рабочих потоков.
+    /// </summary>
     public class PriorityActionProcessor
     {
         private class Worker : IDisposable
@@ -72,13 +76,29 @@
         private readonly Action<Exception>? _errorHandler;
         private bool _disposed = false;
 
+        /// <summary>
+        /// Текущее количество активных рабочих потоков.
+        /// </summary>
         public int WorkerCount => _workers.Count;
 
+        /// <summary>
+        /// Инициализирует процессор с указанным количеством потоков.
+        /// </summary>
+        /// <param name="initialWorkers">Начальное количество рабочих потоков.</param>
+        /// <param name="errorHandler">Обработчик ошибок для действий (опционально).</param>
+        /// <exception cref="ArgumentOutOfRangeException">Если initialWorkers отрицательное.</exception>
         public PriorityActionProcessor(int initialWorkers, Action<Exception>? errorHandler = null)
         {
             _errorHandler = errorHandler;
             SetWorkerCount(initialWorkers);
         }
+
+        /// <summary>
+        /// Добавляет действие в очередь на выполнение с указанным приоритетом.
+        /// </summary>
+        /// <param name="item">Действие для выполнения.</param>
+        /// <param name="priority">Приоритет выполнения (меньше значение = выше приоритет).</param>
+        /// <exception cref="ObjectDisposedException">Если процессор уже уничтожен.</exception>
 
         public void AddItem(Action item, int priority)
         {
@@ -89,6 +109,20 @@
             }
         }
 
+        /// <summary>
+        /// Текущее количество элементов в очереди на обработку.
+        /// </summary>
+        public int ItemsCount => _queue.Count;
+
+        /// <summary>
+        /// Динамически изменяет количество рабочих потоков.
+        /// </summary>
+        /// <param name="newCount">Новое количество потоков.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Если newCount отрицательное.</exception>
+        /// <remarks>
+        /// При уменьшении количества потоков останавливает последние добавленные потоки.
+        /// При увеличении - добавляет новые потоки.
+        /// </remarks>
         public void SetWorkerCount(int newCount)
         {
             ArgumentOutOfRangeException.ThrowIfNegative(newCount);
@@ -122,6 +156,9 @@
             }
         }
 
+        /// <summary>
+        /// Останавливает все рабочие потоки и освобождает ресурсы.
+        /// </summary>
         public void Dispose()
         {
             ObjectDisposedException.ThrowIf(_disposed, this);

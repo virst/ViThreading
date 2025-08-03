@@ -1,9 +1,31 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<Title>ViThreading предоставляет продвинутые инструменты для управления многопоточностью в .NET</Title>
+		<Version>0.2.2</Version>
+		<Authors>virst</Authors>
+		<Description>
+			Библиотека ViThreading предоставляет продвинутые инструменты для управления многопоточностью в .NET 8.0. Основные компоненты решают ключевые проблемы параллельного программирования: динамическое управление ресурсами и приоритетное выполнение задач.
+		</Description>
+		<RepositoryUrl>https://github.com/virst/ViThreading</RepositoryUrl>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="..\README.md">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="..\LICENSE.txt">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+	</ItemGroup>
 
 </Project>
