@@ -1,0 +1,243 @@
+﻿namespace ViThreading
+{
+    /// <summary>
+    /// Обрабатывает задачи (Task) с приоритетами, используя пул рабочих потоков.
+    /// Позволяет динамически управлять количеством рабочих потоков.
+    /// Приоритет определяется типом T через переданный компаратор.
+    /// </summary>
+    /// <typeparam name="T">Тип приоритета задач</typeparam>
+    public class PriorityTaskProcessor<T>
+    {
+        /// <summary>
+        /// Внутренний класс рабочего потока, обрабатывающего задачи из очереди
+        /// </summary>
+        private class Worker : IDisposable
+        {
+            public readonly Thread WorkerTask;
+            private readonly CancellationTokenSource WorkerCts;
+            private readonly PriorityQueue<Task, T> _queue;
+            private readonly Action<Exception>? _errorHandler;
+            private readonly Guid guid = Guid.NewGuid();
+
+            /// <summary>
+            /// Флаг, указывающий активен ли воркер в данный момент (выполняет задачу)
+            /// </summary>
+            public bool IsActive { get; private set; }
+
+            /// <summary>
+            /// Создает и запускает рабочий поток
+            /// </summary>
+            /// <param name="queue">Общая очередь задач</param>
+            /// <param name="errorHandler">Обработчик ошибок (опционально)</param>
+            public Worker(PriorityQueue<Task, T> queue, Action<Exception>? errorHandler = null)
+            {
+                _queue = queue;
+                _errorHandler = errorHandler;
+                IsActive = false;
+
+                WorkerCts = new CancellationTokenSource();
+                WorkerTask = new Thread(() => WorkerLoop(WorkerCts.Token));
+                WorkerTask.Start();
+            }
+
+            /// <summary>
+            /// Основной цикл обработки задач рабочим потоком
+            /// </summary>
+            /// <param name="ct">Токен отмены для graceful shutdown</param>
+            private void WorkerLoop(CancellationToken ct)
+            {
+                try
+                {
+                    while (!ct.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            bool hasItems = false;
+                            Task? task = default;
+                            T? priority = default;
+
+                            // Если очередь пуста - ждем перед следующей проверкой
+                            if (_queue.Count == 0) { Thread.Sleep(50); continue; }
+
+                            // Безопасное извлечение задачи из очереди
+                            lock (_queue)
+                            {
+                                hasItems = _queue.TryDequeue(out task, out priority);
+                            }
+
+                            // Если задача извлечена - выполняем ее
+                            if (hasItems && task != null)
+                            {
+                                IsActive = true;
+                                task.Start(); // Запуск задачи вручную (т.к. Task в состоянии Created)                                
+                                task.Wait(ct); // Ожидание завершения задачи с учетом токена отмены
+                            }
+                            else
+                                Thread.Sleep(50); // Краткая пауза если задача не извлечена
+                        }
+                        catch (Exception ex)
+                        {
+                            // Обработка ошибок с защитой от исключений в обработчике ошибок
+                            try { _errorHandler?.Invoke(ex.InnerException ?? ex); }
+                            catch { /* Ignore handler errors */ }
+                        }
+                        finally
+                        {
+                            IsActive = false; // Сбрасываем фак активности после завершения задачи
+                        }
+
+                        // Проверяем отмену после обработки каждого элемента
+                        if (ct.IsCancellationRequested) break;
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // Ожидаемое исключение при отмене операции - игнорируем
+                }
+            }
+
+            /// <summary>
+            /// Инициирует остановку рабочего потока
+            /// </summary>
+            public void Cancel()
+            {
+                WorkerCts.Cancel();
+            }
+
+            /// <summary>
+            /// Освобождает ресурсы рабочего потока
+            /// </summary>
+            public void Dispose()
+            {
+                WorkerCts.Dispose();
+            }
+        }
+
+        private readonly PriorityQueue<Task, T> _queue;
+        private readonly List<Worker> _workers = [];
+        private readonly object _lock = new();
+        private readonly Action<Exception>? _errorHandler;
+        private bool _disposed = false;
+
+        /// <summary>
+        /// Общее количество рабочих потоков
+        /// </summary>
+        public int WorkerCount => _workers.Count;
+
+        /// <summary>
+        /// Количество активных рабочих потоков (выполняющих задачи в данный момент)
+        /// </summary>
+        public int ActiveWorkerCount => _workers.Count(w => w.IsActive);
+
+        /// <summary>
+        /// Инициализирует процессор задач с указанным количеством потоков и компаратором приоритетов
+        /// </summary>
+        /// <param name="initialWorkers">Начальное количество рабочих потоков</param>       
+        /// <param name="errorHandler">Обработчик ошибок для задач (опционально)</param>
+        /// <exception cref="ArgumentOutOfRangeException">Если initialWorkers отрицательное</exception>
+        public PriorityTaskProcessor(int initialWorkers, Action<Exception>? errorHandler = null) : this(initialWorkers, null, errorHandler) { }
+
+
+        /// <summary>
+        /// Инициализирует процессор задач с указанным количеством потоков и компаратором приоритетов
+        /// </summary>
+        /// <param name="initialWorkers">Начальное количество рабочих потоков</param>
+        /// <param name="comparer">Компаратор для определения порядка приоритетов</param>
+        /// <param name="errorHandler">Обработчик ошибок для задач (опционально)</param>
+        /// <exception cref="ArgumentOutOfRangeException">Если initialWorkers отрицательное</exception>
+        public PriorityTaskProcessor(int initialWorkers, IComparer<T>? comparer, Action<Exception>? errorHandler = null)
+        {
+            if (comparer != null)
+                _queue = new(comparer);
+            else
+                _queue = new();
+            _errorHandler = errorHandler;
+            SetWorkerCount(initialWorkers);
+        }
+
+        /// <summary>
+        /// Добавляет задачу в очередь на выполнение с указанным приоритетом
+        /// </summary>
+        /// <param name="item">Задача для выполнения</param>
+        /// <param name="priority">Приоритет выполнения</param>
+        /// <param name="id">Идентификатор задачи (для отслеживания)</param>
+        /// <exception cref="ObjectDisposedException">Если процессор уже уничтожен</exception>
+        public void AddItem(Task item, T priority)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            lock (_queue)
+            {
+                _queue.Enqueue(item, priority);
+            }
+        }
+
+        /// <summary>
+        /// Текущее количество задач в очереди на обработку
+        /// </summary>
+        public int ItemsCount => _queue.Count;
+
+        /// <summary>
+        /// Динамически изменяет количество рабочих потоков
+        /// </summary>
+        /// <param name="newCount">Новое количество потоков</param>
+        /// <exception cref="ArgumentOutOfRangeException">Если newCount отрицательное</exception>
+        /// <remarks>
+        /// При уменьшении количества потоков останавливает последние добавленные потоки.
+        /// При увеличении - добавляет новые потоки.
+        /// Операция выполняется потокобезопасно.
+        /// </remarks>
+        public void SetWorkerCount(int newCount)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(newCount);
+            if (newCount == _workers.Count) return; // Нет изменений, ничего не делаем
+
+            lock (_lock)
+            {
+                // Увеличиваем количество воркеров
+                if (newCount > _workers.Count)
+                {
+                    for (int i = _workers.Count; i < newCount; i++)
+                    {
+                        _workers.Add(new Worker(_queue, _errorHandler));
+                    }
+                }
+                // Уменьшаем количество воркеров
+                else if (newCount < _workers.Count)
+                {
+                    int removeCount = _workers.Count - newCount;
+                    var tasksToRemove = _workers.GetRange(_workers.Count - removeCount, removeCount);
+                    var tasksToWait = tasksToRemove.Select(t => t.WorkerTask);
+
+                    // Инициируем отмену для последних workers
+                    tasksToRemove.ForEach(t => t.Cancel());
+                    foreach (var t in tasksToWait) t.Join(); // Ожидаем завершения потоков
+                    tasksToRemove.ForEach(t => t.Dispose()); // Освобождаем ресурсы
+
+                    // Удаляем из отслеживаемых списков              
+                    _workers.RemoveRange(_workers.Count - removeCount, removeCount);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Останавливает все рабочие потоки и освобождает ресурсы
+        /// </summary>
+        public void Dispose()
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            _disposed = true;
+
+            // Инициируем отмену для всех воркеров
+            foreach (var worker in _workers) worker.Cancel();
+
+            // Ожидаем завершения всех рабочих потоков
+            foreach (var worker in _workers) worker.WorkerTask.Join();
+
+            // Освобождаем ресурсы
+            foreach (var worker in _workers) worker.Dispose();
+
+            _workers.Clear();
+        }
+    }
+}

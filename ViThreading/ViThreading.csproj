@@ -1,11 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
+		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 		<TargetFramework>net8.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<Title>ViThreading предоставляет продвинутые инструменты для управления многопоточностью в .NET</Title>
-		<Version>0.2.2</Version>
+		<Version>0.2.4</Version>
 		<Authors>virst</Authors>
 		<Description>
 			Библиотека ViThreading предоставляет продвинутые инструменты для управления многопоточностью в .NET 8.0. Основные компоненты решают ключевые проблемы параллельного программирования: динамическое управление ресурсами и приоритетное выполнение задач.

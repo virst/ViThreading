@@ -39,7 +39,7 @@
                             if (hasItems && item != null)
                                 item();
                             else
-                                await Task.Delay(50);
+                                await Task.Delay(50, ct);
                         }
                         catch (Exception ex)
                         {
@@ -71,7 +71,7 @@
 
 
         private readonly PriorityQueue<Action, int> _queue = new();
-        private readonly List<Worker> _workers = new();
+        private readonly List<Worker> _workers = [];
         private readonly object _lock = new();
         private readonly Action<Exception>? _errorHandler;
         private bool _disposed = false;

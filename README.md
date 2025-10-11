@@ -113,6 +113,45 @@ processor.SetWorkerCount(2);
 
 ---
 
+#### 3. `PriorityTaskProcessor<T>`: Обработчик задач с типизированными приоритетами
+
+**Решаемая проблема**:  
+Для сценариев, требующих сложной логики приоритетов (не только числовой), этот компонент предоставляет:
+- Типизированные приоритеты любого типа `T`
+- Гибкую систему сравнения через кастомные компараторы
+- Обработку задач (`Task`) вместо простых действий
+
+**Архитектура**:
+```csharp
+public class PriorityTaskProcessor<T>
+{
+    // Общее количество рабочих потоков
+    public int WorkerCount { get; }
+    
+    // Количество активных рабочих потоков
+    public int ActiveWorkerCount { get; }
+
+    // Инициализация с компаратором приоритетов
+    public PriorityTaskProcessor(int initialWorkers, 
+                               IComparer<T>? comparer = null,
+                               Action<Exception>? errorHandler = null);
+
+    // Добавление задачи с приоритетом
+    public void AddItem(Task item, T priority);
+
+    // Изменение размера пула потоков
+    public void SetWorkerCount(int newCount);
+}
+```
+
+**Особенности реализации**:
+- **Гибкие приоритеты**: Поддержка любых типов приоритетов (enum, string, custom objects)
+- **Кастомные компараторы**: Полный контроль над порядком выполнения
+- **Мониторинг в реальном времени**: Отслеживание активных и общих воркеров
+- **Thread-based workers**: Использует потоки вместо Task для точного контроля
+
+---
+
 ### Примеры использования
 
 #### Сценарий 1: Адаптивный API-шлюз
@@ -149,6 +188,30 @@ processor.AddItem(() => GenerateReport(), priority: 100);
 
 // Автомасштабирование при пиковой нагрузке
 processor.SetWorkerCount(8); // Увеличение для Black Friday
+```
+
+#### Сценарий 3: Обработка транзакций со сложными приоритетами
+```csharp
+// Приоритет: категория клиента + время запроса
+class TransactionPriority
+{
+    public ClientTier Tier { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+var processor = new PriorityTaskProcessor<TransactionPriority>(
+    initialWorkers: 5,
+    comparer: Comparer<TransactionPriority>.Create((a, b) => {
+        if (a.Tier != b.Tier) return a.Tier.CompareTo(b.Tier);
+        return a.CreatedAt.CompareTo(b.CreatedAt);
+    })
+);
+
+// Срочная транзакция VIP клиента
+processor.AddItem(
+    new Task(() => ProcessTransaction(vipTransaction)),
+    new TransactionPriority { Tier = ClientTier.VIP, CreatedAt = DateTime.Now }
+);
 ```
 
 ---
