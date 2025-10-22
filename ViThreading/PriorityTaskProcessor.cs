@@ -14,10 +14,9 @@
         private class Worker : IDisposable
         {
             public readonly Thread WorkerTask;
-            private readonly CancellationTokenSource WorkerCts;
+            private readonly CancellationTokenSource _workerCts;
             private readonly PriorityQueue<Task, T> _queue;
             private readonly Action<Exception>? _errorHandler;
-            private readonly Guid guid = Guid.NewGuid();
 
             /// <summary>
             /// Флаг, указывающий активен ли воркер в данный момент (выполняет задачу)
@@ -35,8 +34,8 @@
                 _errorHandler = errorHandler;
                 IsActive = false;
 
-                WorkerCts = new CancellationTokenSource();
-                WorkerTask = new Thread(() => WorkerLoop(WorkerCts.Token));
+                _workerCts = new CancellationTokenSource();
+                WorkerTask = new Thread(() => WorkerLoop(_workerCts.Token));
                 WorkerTask.Start();
             }
 
@@ -101,7 +100,7 @@
             /// </summary>
             public void Cancel()
             {
-                WorkerCts.Cancel();
+                _workerCts.Cancel();
             }
 
             /// <summary>
@@ -109,7 +108,7 @@
             /// </summary>
             public void Dispose()
             {
-                WorkerCts.Dispose();
+                _workerCts.Dispose();
             }
         }
 

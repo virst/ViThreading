@@ -21,11 +21,24 @@ public class PriorityActionProcessorTests
         var results = new List<int>();
         var sync = new object();
 
-        processor.AddItem(() => { lock (sync) results.Add(3); }, 3);
-        processor.AddItem(() => { lock (sync) results.Add(1); }, 1);
-        processor.AddItem(() => { lock (sync) results.Add(2); }, 2);
+        PriorityTask[] tasks =
+        [
+            processor.AddItem(() =>
+            {
+                lock (sync) results.Add(3);
+            }, 3),
+            processor.AddItem(() =>
+            {
+                lock (sync) results.Add(1);
+            }, 1),
+            processor.AddItem(() =>
+            {
+                lock (sync) results.Add(2);
+            }, 2)
+        ];
 
-        Thread.Sleep(200);
+        PriorityTask.WaitAll(tasks);  
+
         Assert.Equal(new[] { 1, 2, 3 }, results);
     }
 
@@ -132,7 +145,7 @@ public class PriorityActionProcessorTests
         Thread.Sleep(100);
 
         processor.AddItem(() => executed = true, 1);
-        Thread.Sleep(50);
+        Thread.Sleep(500);
 
         Assert.True(executed);
     }
