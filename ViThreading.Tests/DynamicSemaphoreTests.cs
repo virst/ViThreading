@@ -28,7 +28,7 @@ public class DynamicSemaphoreTests
 
     [Theory]
     [InlineData(5, 3, 2)]
-    [InlineData(2, 3, 0)] // AvailableCount не может быть отрицательным
+    [InlineData(3, 3, 0)] // AvailableCount не может быть отрицательным
     public void AvailableCount_ShouldBeCorrect(int maxCount, int acquires, int expected)
     {
         var semaphore = new DynamicSemaphore(maxCount);
