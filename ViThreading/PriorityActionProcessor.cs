@@ -42,7 +42,10 @@
                 IsActive = false;
 
                 _workerCts = new CancellationTokenSource();
-                WorkerTask = new Thread(() => WorkerLoop(_workerCts.Token));
+                WorkerTask = new Thread(() => WorkerLoop(_workerCts.Token))
+                {
+                    IsBackground = true
+                };
                 WorkerTask.Start();
             }
 
